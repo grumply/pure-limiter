@@ -2,7 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE TypeFamilies #-}
-module Pure.Data.Limiter (Bucket,Bucket_(..),Tokens,limiter,limit,minDelay) where
+module Pure.Data.Limiter (Limiter,Limiter_(..),Tokens,limiter,limit,minDelay) where
 
 -- from pure-time
 import Pure.Data.Time
@@ -23,36 +23,36 @@ import GHC.Generics
 
 type Tokens = Int
 
-type Bucket = MVar Bucket_
-data Bucket_ = Bucket
+type Limiter = MVar Limiter_
+data Limiter_ = Limiter
   { bValue        :: {-# UNPACK #-}!Tokens
+  , bMax          :: {-# UNPACK #-}!Tokens
   , bLastUpdate   :: {-# UNPACK #-}!Micros
-  , bBurst        :: {-# UNPACK #-}!Tokens
   , bRefillTime   :: {-# UNPACK #-}!Micros
   , bRefillAmount :: {-# UNPACK #-}!Tokens
   } deriving (Eq,Generic,ToJSON,FromJSON)
 
-limiter :: Int -> Int -> Micros -> IO Bucket
-limiter bBurst bRefillAmount bRefillTime = do
+limiter :: Int -> Int -> Int -> Micros -> IO Limiter
+limiter bMax bValue bRefillAmount bRefillTime = do
   bLastUpdate <- micros
-  let bValue = bBurst
-  newMVar Bucket {..}
+  newMVar Limiter {..}
 
 {-# INLINE reduce #-}
-reduce :: Int -> Bucket -> IO Bool
-reduce tokens bucket = modifyMVar bucket $ \Bucket {..} -> do
+reduce :: Int -> Limiter -> IO Bool
+reduce tokens bucket = modifyMVar bucket $ \Limiter {..} -> do
   now  <- micros
   let last = round $ getMicros bLastUpdate
       val  = bValue
       refillTime :: Int
       refillTime = round $ getMicros bRefillTime
       refillCount = (round (getMicros now) - last) `div` refillTime
-      value = min bBurst (abs {- protect from overflow -} $ val + refillCount * bRefillAmount)
+      value = min bMax (abs {- protect from overflow -} $ val + refillCount * bRefillAmount)
       lu    = min now (Micros $ fromIntegral $ last + refillCount * refillTime)
-  return (Bucket { bValue = value, bLastUpdate = lu, .. },tokens <= value)
+      limited = tokens > value
+  return (Limiter { bValue = if not limited then value - tokens else value, bLastUpdate = lu, .. },not limited)
 
 {-# INLINE limit #-}
-limit :: Int -> Bucket -> IO a -> IO (Maybe a)
+limit :: Int -> Limiter -> IO a -> IO (Maybe a)
 limit tokens bucket f = do
   b <- Pure.Data.Limiter.reduce tokens bucket
   if b
@@ -60,9 +60,9 @@ limit tokens bucket f = do
     else return Nothing
 
 {-# INLINE minDelay #-}
-minDelay :: Int -> Bucket -> IO Micros
+minDelay :: Int -> Limiter -> IO Micros
 minDelay tokens bucket = do
-  Bucket {..} <- readMVar bucket
+  Limiter {..} <- readMVar bucket
   if bValue > tokens
     then return 0
     else do
