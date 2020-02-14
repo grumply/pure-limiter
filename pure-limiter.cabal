@@ -1,20 +1,23 @@
 name:                pure-limiter
-version:             0.7.0.0
-synopsis:
-homepage:            github.com/grumply/pure-limiter
+version:             0.8.0.0
+homepage:            purehs.org/doc/pure-loader
 license:             BSD3
 license-file:        LICENSE
-author:              Sean Mackenzie
-maintainer:          sean@grump.ly
+author:              Sean Hickman
+maintainer:          sean@grumply.com
 category:            Web
 build-type:          Simple
 cabal-version:       >=1.10
 
+source-repository head
+  type: git
+  location: https://github.com/grumply/pure-limiter.git
+
 library
   build-depends:
-    base >= 4.8 && < 5,
-    pure-json >= 0.7 && < 1,
-    pure-time >= 0.7 && < 1
+    base,
+    pure-json,
+    pure-time
 
   hs-source-dirs: src
 
