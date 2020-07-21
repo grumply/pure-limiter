@@ -14,6 +14,9 @@ import Pure.Data.JSON
 import Control.Concurrent
 import GHC.Generics
 
+-- from transformers
+import Control.Monad.IO.Class
+
 -- Inspired by: https://medium.com/smyte/rate-limiter-df3408325846
 
 -- In multi-threaded contexts, be sure that all rate-limited actions use the same number of tokens.
@@ -32,14 +35,14 @@ data Limiter_ = Limiter
   , bRefillAmount :: {-# UNPACK #-}!Tokens
   } deriving (Eq,Generic,ToJSON,FromJSON)
 
-limiter :: Int -> Int -> Int -> Micros -> IO Limiter
-limiter bMax bValue bRefillAmount bRefillTime = do
+limiter :: MonadIO m => Int -> Int -> Int -> Micros -> m Limiter
+limiter bMax bValue bRefillAmount bRefillTime = liftIO $ do
   bLastUpdate <- micros
   newMVar Limiter {..}
 
 {-# INLINE reduce #-}
-reduce :: Int -> Limiter -> IO Bool
-reduce tokens bucket = modifyMVar bucket $ \Limiter {..} -> do
+reduce :: MonadIO m => Int -> Limiter -> m Bool
+reduce tokens bucket = liftIO $ modifyMVar bucket $ \Limiter {..} -> do
   now  <- micros
   let last = round $ getMicros bLastUpdate
       val  = bValue
@@ -52,7 +55,7 @@ reduce tokens bucket = modifyMVar bucket $ \Limiter {..} -> do
   return (Limiter { bValue = if not limited then value - tokens else value, bLastUpdate = lu, .. },not limited)
 
 {-# INLINE limit #-}
-limit :: Int -> Limiter -> IO a -> IO (Maybe a)
+limit :: MonadIO m => Int -> Limiter -> m a -> m (Maybe a)
 limit tokens bucket f = do
   b <- Pure.Data.Limiter.reduce tokens bucket
   if b
@@ -60,8 +63,8 @@ limit tokens bucket f = do
     else return Nothing
 
 {-# INLINE minDelay #-}
-minDelay :: Int -> Limiter -> IO Micros
-minDelay tokens bucket = do
+minDelay :: MonadIO m => Int -> Limiter -> m Micros
+minDelay tokens bucket = liftIO $ do
   Limiter {..} <- readMVar bucket
   if bValue > tokens
     then return 0
