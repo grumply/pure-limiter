@@ -1,6 +1,6 @@
 name:                pure-limiter
 version:             0.8.0.0
-homepage:            purehs.org/doc/pure-loader
+homepage:            purehs.org/doc/pure-limiter
 license:             BSD3
 license-file:        LICENSE
 author:              Sean Hickman
